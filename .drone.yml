@@ -14,7 +14,7 @@ steps:
   image: plugins/docker
   settings:
     repo: rain123473/gggcp
-    dockerfile: go.dockerfile
+    dockerfile: Dockerfile
     auto_tag: true
     purge: true
     username:
