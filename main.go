@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 var (
 	lastEventBegin = ""
+	StartMsg       = "Dear，Remind you that the little bell is activated when GCP GG😉"
 )
 
 func main() {
@@ -41,9 +43,15 @@ func main() {
 				}
 
 				TelUrl := "https://api.telegram.org/bot" + TelegramBotKey + "/sendMessage?chat_id=" + ChatID + "&text="
-				start := &url.URL{Path: "Dear，Remind you that the little bell is activated when GCP GG😉"}
+				start := &url.URL{Path: StartMsg}
 				resp, _ := http.Get(TelUrl + start.String())
 				resp.Body.Close()
+
+				SlackWebHook := c.Args().Get(2)
+				SlackChannel := c.Args().Get(3)
+				if SlackWebHook != "" && SlackChannel != "" {
+					SendToSlack(SlackWebHook, SlackChannel, "GGGCP", StartMsg)
+				}
 
 				for {
 					gcpStatus, err := checkGCPStatus()
@@ -52,7 +60,12 @@ func main() {
 						fmt.Println("Full Url -> ", TelUrl+url.QueryEscape(gt))
 						resp, _ := http.Get(TelUrl + url.QueryEscape(gt))
 
+						if SlackWebHook != "" && SlackChannel != "" {
+							SendToSlack(SlackWebHook, SlackChannel, "GGGCP", gt)
+						}
+
 						resp.Body.Close()
+
 						time.Sleep(time.Duration(60) * time.Second)
 					}
 
@@ -60,6 +73,10 @@ func main() {
 						et := "[warn] GGGCP has Error！\n" + err.Error()
 						fmt.Println(et)
 						resp, _ := http.Get(TelUrl + url.QueryEscape(et))
+
+						if SlackWebHook != "" && SlackChannel != "" {
+							SendToSlack(SlackWebHook, SlackChannel, "GGGCP", et)
+						}
 
 						resp.Body.Close()
 						time.Sleep(time.Duration(60) * time.Second)
@@ -167,4 +184,39 @@ func checkGCPStatus() (de error, gcp error) {
 	}
 
 	return nil, nil
+}
+
+// SendToSlack
+func SendToSlack(hook string, channel string, username string, text string) {
+	type Payload struct {
+		Text     string `json:"text"`
+		Channel  string `json:"channel"`
+		Username string `json:"username"`
+	}
+
+	data := Payload{
+		Text:     text,
+		Channel:  channel,
+		Username: username,
+	}
+
+	payloadBytes, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("[warn] SendToSlack:", err)
+	}
+
+	body := bytes.NewReader(payloadBytes)
+
+	req, err := http.NewRequest("POST", hook, body)
+	if err != nil {
+		fmt.Println("[warn] SendToSlack:", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("[warn] SendToSlack:", err)
+	}
+	defer resp.Body.Close()
 }
